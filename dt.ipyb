@@ -1,0 +1,687 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Lab 4.1:  Decision Trees\n",
+    "\n",
+    "Decision trees can be used for either regression or classification tasks. Decision trees are a powerful tool; however, are very prone to overfitting the training dataset and therefore often fail to generalize well to test data sets. However, they are the building block for several other powerful machine learning algorithms and are therefore important to learn about.\n",
+    "\n",
+    "<img src=\"./images/DecisionTreeExample.png\" alt=\"Drawing\" style=\"width: 500px;height=500\"/>\n",
+    "\n",
+    "What we'll be doing in this notebook:\n",
+    "-----\n",
+    "\n",
+    "1. Import packages\n",
+    "2. Load data\n",
+    "3. Build a Decision Tree\n",
+    "4. Tune parameters\n",
+    "5. Feature importance\n",
+    "6. Homework\n",
+    "7. Advanced material\n",
+    "\n",
+    "Our previous Linear regression model assumes linearity among others.\n",
+    "\n",
+    "Whereas decision trees and associated algorithms are no longer restricted to independent variables which have a linear relationship and we don't have to ensure several assumptions are true. \n",
+    "\n",
+    "Therefore we can start to bring in other features that could be useful.\n",
+    "\n",
+    "After we run our decision trees, we will compare our new output to our output from the linear regressions we ran in the previous notebook. \n",
+    "\n",
+    "In this notebook, we will be looking at how we can predict the loan amount using decision trees. \n",
+    "\n",
+    "Here is visual introduction to [decision trees](https://algobeans.com/2016/07/27/decision-trees-tutorial/)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Import packages"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import graphviz \n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "%matplotlib inline\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV\n",
+    "from sklearn.tree import DecisionTreeRegressor\n",
+    "from sklearn import tree\n",
+    "from sklearn.metrics import mean_squared_error, r2_score"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "If you do not have graphviz installed or are having problems displaying the tree structure later on, try:\n",
+    "\n",
+    "Mac/Windows:\n",
+    "\n",
+    "```bash\n",
+    "$ brew install graphviz \n",
+    "```\n",
+    "\n",
+    "Linux:\n",
+    "\n",
+    "```\n",
+    "$ sudo apt-get install graphviz\n",
+    "```"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Load and format data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load data to pandas DataFrame\n",
+    "data_path = '../data/'\n",
+    "df = pd.read_csv(data_path+'clean_data.csv.zip', \n",
+    "                 low_memory=False) "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "We are going to build regressors to predict the loan amount and we will build a tree that considers many the features in the dataset - including those we have engineered ourselves.\n",
+    "\n",
+    "Here we choose a limited subset of data to conduct the analysis for the sake of training time. In practice, we should use more features. This is a mix of numeric and one hot-coded categorical variables. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "cols = df[['loan_amount', \n",
+    "           'partner_delinquency_rate',\n",
+    "            'posted_year',\n",
+    "           'posted_month',\n",
+    "           'num_tags',\n",
+    "           '#Woman Owned Biz',\n",
+    "           'age_int',\n",
+    "           '#Repeat Borrower',\n",
+    "           'children_int',\n",
+    "           'terms.repayment_term',\n",
+    "           'pct_female',\n",
+    "           'exploratory_partner',\n",
+    "           'partner_dollar_amount',\n",
+    "           'top_partner_id',\n",
+    "           'days_to_fund']]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "We are going to build regressors to predict the loan amount and we will build a tree that considers many the features in the dataset - including those we have engineered ourselves."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "y = cols['loan_amount']\n",
+    "# drop returns a copy of the DataFrame with the specified columns removed.  \n",
+    "X = cols.drop('loan_amount', axis=1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Split data into training and testing sets;\n",
+    "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Build a Decision Tree\n",
+    "We will use sklearn's implementation of a Decision Tree Regressor and to learn how to use it, here are the [docs](http://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeRegressor.html#sklearn.tree.DecisionTreeRegressor.get_params), or simply put a question mark before a call to the class.  \n",
+    "\n",
+    "Prepending a ? to any method, variable, or class will display that method's defined docstring (way to go IPython!)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "DecisionTreeRegressor?"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Many of the sklearn algorithms are implemented using the same standard steps: \n",
+    "- **Step 1: Initiate the algorithm** Define the parameters (& hyperparameters of the algorithm) of the algorithm. For example, the maximum depth, the minimum samples in a leaf etc. (check documentation for more information)\n",
+    "\n",
+    "- **Step 2: Train the algorithm** Train the algorithm by fitting it to the X_train and y_train datasets.\n",
+    "\n",
+    "- **Step 3: Evaluating the algorithm** Evaluate the predictive power of the algorithm by comparing the predictive loan amount values to the true values. We can do this for the training and testing dataset."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Here is a function which encapsulates the 3 model implementation steps; Initialize, Train, Evaluate our decision tree regressor. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def train_score_regressor(sklearn_regressor, X_train, y_train, X_test, y_test, model_parameters):\n",
+    "    '''\n",
+    "    Purpose: \n",
+    "        - train a regressor on training data\n",
+    "        - score data on training and test data\n",
+    "        - return trained model\n",
+    "    '''\n",
+    "    # Step 1: Initializing the sklearn regressor \n",
+    "    regressor = sklearn_regressor(**model_parameters)\n",
+    "    \n",
+    "    # Step 2: Training the algorithm using the X_train dataset of features and y_train, the associated target features\n",
+    "    regressor.fit(X_train, y_train)\n",
+    "    \n",
+    "    # Step 3: Calculating the score of the predictive power on the training and testing dataset.\n",
+    "    training_score = regressor.score(X_train, y_train)\n",
+    "    testing_score = regressor.score(X_test, y_test)\n",
+    "    \n",
+    "    # Print the results!\n",
+    "    print(f\"Train score: {training_score:.4}\")\n",
+    "    print(f\"Test score: {testing_score:.4}\")\n",
+    "        \n",
+    "    return regressor"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "With all tree algorithms the major challenge is using the parameters to balance the bias vs variance trade-off.  \n",
+    "\n",
+    "To start, check how the model preforms when using the default values."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "trained_regressor = train_score_regressor(sklearn_regressor = DecisionTreeRegressor,\n",
+    "                                          X_train = X_train, y_train = y_train, \n",
+    "                                          X_test = X_test, y_test = y_test, \n",
+    "                                          model_parameters = {'random_state':42})"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Our module managed to get a perfect r2 scored on the training data but performs poorly on the test data.  This is a clear indication that the model has **overfit to the training data**.\n",
+    "\n",
+    "The default sklearn's implementation of a DecisionTreeRegressor does not put any restrictions on the depth of the tree, the number of samples per leaf, etc.  Consequently, the model finds signal in the noise of the training data set, overfits and performs poorly on the test data.  \n",
+    "\n",
+    "When a model overfits to a training data set, we say it has **high variance**.  Since an unconstrained decision tree will almost perfectly model any training data, it will vary tremendously depending on the training data that is provided."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 4. Parameter tuning\n",
+    "To reduce the variance, we constrain the model using some of the provided parameters for example:\n",
+    "- Criterion (Cost function used to measure the purity of a split)\n",
+    "- Maximum depth of the tree\n",
+    "- Minimum samples for each node split\n",
+    "- Minimum samples for each terminal node\n",
+    "- Maximum number of terminal nodes\n",
+    "\n",
+    "Look back over the [slides](https://docs.google.com/presentation/d/1leWPbwis9GJHJcQehlhPhtKEAErUPvlTpKjnkv1aWWU/edit?usp=sharing) or use this [useful blog](https://www.analyticsvidhya.com/blog/2016/04/complete-tutorial-tree-based-modeling-scratch-in-python/#four) for a refresher on decision tree parameters.\n",
+    "\n",
+    "Initially, we are going to experiment with the max_depth parameter only. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Define the model parameters \n",
+    "# We are fixing the random state so that the results are reproducible and consistent.\n",
+    "parameters = {\"max_depth\":6,'random_state':42}\n",
+    "\n",
+    "# Train and evaluate the model\n",
+    "trained_regressor = train_score_regressor(sklearn_regressor=DecisionTreeRegressor,\n",
+    "                                          X_train=X_train, y_train=y_train, \n",
+    "                                          X_test=X_test, y_test=y_test, \n",
+    "                                          model_parameters = parameters)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Although the training r2 score has dropped significantly, the test r2 score increased. Since the goal is develop a model that accurately predict data we have never seen, that is the metric we care about!\n",
+    "\n",
+    "Now that we have increased preformance, let's take a look at what the Decision Tree looks like."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# from the sklearn tree library, create image of trained decision tree\n",
+    "dot_data = tree.export_graphviz(trained_regressor, out_file=None, \n",
+    "                         feature_names=X_train.columns,  \n",
+    "                         class_names=y_train.values,  \n",
+    "                         filled=True, rounded=True,  \n",
+    "                         special_characters=True) \n",
+    "# use graphviz to render the image\n",
+    "graph = graphviz.Source(dot_data) \n",
+    "graph"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "** IMPORTANT**\n",
+    "\n",
+    "A DecisionTreeRegressor with a max depth of only 4 is still rather complicated. To develop your intuition for the various input parameters, manually adjust them up and down to see the impacts.\n",
+    "\n",
+    "Overall we're aiming for the highest predictive power on the test set. However, if you were to tune the parameters manually towards a higher score on the test data set, we would overfit to this specific test data set and the model would not generalize well to a secondary test data set.  \n",
+    "To avoid this, we will use k-fold validation. In addition to k-fold validation, we will use sklearn's GridSearchCV, which allows us using k-fold validation to assess every permuation of possible values for the parameters that we provide. See the [Advanced Material](#AdvancedCV) at the bottom of this notebook for a quick overview of these two methods.\n",
+    "\n",
+    "**Note** since we are training one regressor one time for each possible permutation of specified parameter values, this next cell will take some time to run.  That is why you need to gain an intuition for which values to test!"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Set parameters to search through - known as parameter grid\n",
+    "parameters = {'max_depth':[8,10,14], \n",
+    "              'min_impurity_decrease': [.1,.01, 0.0],\n",
+    "              'min_samples_split': [10, 50, 2]}\n",
+    "# Initialize model\n",
+    "decision_regressor= DecisionTreeRegressor(random_state=42)\n",
+    "\n",
+    "# Initialize GridSearch and then fit\n",
+    "regressor = GridSearchCV(decision_regressor, parameters)\n",
+    "regressor.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# print out what GridSearchCV found to be the best parameters \n",
+    "regressor.best_estimator_.get_params()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# evaluate the tuned model\n",
+    "trained_regressor = train_score_regressor(sklearn_regressor = DecisionTreeRegressor,\n",
+    "                                          X_train = X_train, y_train = y_train, \n",
+    "                                          X_test = X_test, y_test = y_test, \n",
+    "                                          model_parameters = regressor.best_estimator_.get_params())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Performance on the test data has increased again - not bad!\n",
+    "\n",
+    "The R^2 number above is pretty telling but it is always good to visualise how these look in a scattor plot."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# plotting a graph of the true values vs the predicted values for the training and test datasets\n",
+    "def plot_y_yhat_scatter(y_actual,y_predicted,train_test):\n",
+    "    ax = sns.regplot(x=y_actual, y=y_predicted, fit_reg=False)\n",
+    "    ax.set_xlabel('true values')\n",
+    "    ax.set_ylabel('predicted values')\n",
+    "    ax.set_title('Relationship between true and predicted loan amounts: '+train_test+' results')\n",
+    "    pass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "plot_y_yhat_scatter(y_train, trained_regressor.predict(X_train),train_test = \"training\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "plot_y_yhat_scatter(y_test, trained_regressor.predict(X_test),train_test = \"test\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Feature Importance\n",
+    "\n",
+    "We can look at which features are driving our model's predictions by examining the feature importance. \n",
+    "\n",
+    "Remember the magnitude of the 'importance' is not indicative of how important the feature is, only the order matters!\n",
+    "\n",
+    "For example,\n",
+    "- feature A has an importance of 0.5 \n",
+    "- feature B has an importance of 0.25. \n",
+    "\n",
+    "All we can take away is that feature A explains more variance then feature B, **not** that feature A explains twice as much as feature B. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Get the feature importances from our final trained model...\n",
+    "importances = trained_regressor.feature_importances_\n",
+    "\n",
+    "# Find the indices of the feature importances in descending order\n",
+    "indices = np.argsort(importances)[::-1]\n",
+    "\n",
+    "# Plotting a bar chart of feature importances in descending order\n",
+    "plt.figure(figsize=(12,7))\n",
+    "sns.barplot(y=X_train.columns[indices],x=importances[indices])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "There is not a clear relationship between any single feature and the loan_amount. The most important feature borrower count for One Acre Fund during their high loan period - this is very specific to just a small subset of the data. \n",
+    "\n",
+    "However the aggregate of these features together into the decision leads to effective predictions (R^2 ~ 0.66). This is a testament to the predictive power of decisions trees!\n",
+    "\n",
+    "Remember that Decision Trees can also be used to classify data.\n",
+    "For example some interesting classification questions we could investigate are:\n",
+    "\n",
+    "- Can we classify which loans expired and which one got funded?\n",
+    "- Is a loan posted by a male or female?"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Advanced Material: Optimising the algorithm\n",
+    "<a id='AdvancedCV'></a>"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### K-folds example for finding optimal parameters "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "K-folds is a method of evaluating and tuning a model on the given dataset without overfitting to either the training dataset or the testing dataset. It finds the optimal balance between bias and variance in the model. \n",
+    "\n",
+    "Below we show how the model performs on the training and test datasets while varying the max tree depth. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# define max depth range\n",
+    "depth_range = np.asarray(range(2,22,2))\n",
+    "\n",
+    "# initialize empty arrays to store the results\n",
+    "scores_train = np.zeros(len(depth_range))\n",
+    "scores_test = np.zeros(len(depth_range))\n",
+    "\n",
+    "for i in range(len(depth_range)):\n",
+    "    # train DTR with given max depth\n",
+    "    dt_regressor = DecisionTreeRegressor(max_depth=depth_range[i], random_state=42)\n",
+    "    model = dt_regressor.fit(X_train, y_train)\n",
+    "    # evaluate on both training and test datasets\n",
+    "    scores_train[i] = model.score(X_train, y_train)\n",
+    "    scores_test[i] = model.score(X_test, y_test)\n",
+    "\n",
+    "# plot the results on the same graph\n",
+    "ax = sns.regplot(x=depth_range, y=scores_train, order=3, ci=None,label='train')\n",
+    "sns.regplot(x=depth_range, y=scores_test,order=3, ci=None, label='test', ax=ax)\n",
+    "ax.legend(loc='best')\n",
+    "ax.set_ylabel('R2 from regression between true and predicted values')\n",
+    "ax.set_xlabel('Max depth of the tree')\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "As the depth increases:\n",
+    "- The training score increases\n",
+    "- But the testing score decreases\n",
+    "\n",
+    "Once the test score starts decreasing, this indicates that the model is overfitting. \n",
+    "\n",
+    "We could be tempted to say that the optimal depth is 8 as this corresponds to the maximum score for the testing data. **This is not always the case**. The test set is just random fixed subset of data so choosing the optimal parameter here would be overfitting to the testset. \n",
+    "\n",
+    "This is where K-Folds cross validation comes in! This method does the following:\n",
+    "- Splits the dataset K equal random subsests\n",
+    "- Trains the data on K-1 subsets\n",
+    "- Evaluates performance on Kth left out subset\n",
+    "- Stores evaluation metric\n",
+    "- Repeats for K times for each random subset\n",
+    "\n",
+    "If K = 5, the algorithm trains 5 times. Each time it holds out a 5th of the data, trains on the other 4/5ths and then evaluates the performance on the held out 5th. \n",
+    "\n",
+    "Here is an example of how the cross validation score changes with maximum tree depth"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# initialize empty array to store results\n",
+    "scores_cv = np.empty(len(depth_range))\n",
+    "for i in range(len(depth_range)):\n",
+    "    # initialize model\n",
+    "    dt_regressor = DecisionTreeRegressor(max_depth=depth_range[i], random_state=42)\n",
+    "    # calculate the cross val scores. This returns an array where each element corresponds to the performance on each k-fold.\n",
+    "    cv_scores = cross_val_score(dt_regressor, X_train, y_train,cv=5, n_jobs=-1)\n",
+    "    # calculate mean cross validation score and save\n",
+    "    scores_cv[i] = np.mean(cv_scores)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# plot results\n",
+    "ax = sns.regplot(x=depth_range, y=scores_cv, ci=None, order=3)\n",
+    "ax.set_xlabel('Max depth of the tree')\n",
+    "ax.set_ylabel('Average cross validated R2')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Again we see the same general trend of the score increasing intially and then dropping off. From this curve, the optimal max_depth would be between 8 and 10."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### GridSearchCV (CV = cross validation)\n",
+    "Above we were looking at a single parameter. However, to increase performance we should adjust several parameters. \n",
+    "\n",
+    "Sklearn's GridSearchCV uses the cross-validation above to assess the performance of **each possible permutation** of the hyper-parameters that you specify. For this reason, care should be taken to choose the correct range of parameters to search through as adding an additional parameter can increase the search time exponentially.\n",
+    "\n",
+    "It then returns a model initialised with the optimal parameters."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "GridSearchCV?"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "parameters = {'min_impurity_decrease': [.1, 0.01, 0.],\n",
+    "              'max_depth': [None, 5, 8, 10]}\n",
+    "\n",
+    "# initialize model\n",
+    "gridrf = DecisionTreeRegressor()\n",
+    "\n",
+    "# set up and fit gridsearchCV\n",
+    "grid_rf = GridSearchCV(gridrf, parameters)\n",
+    "grid_rf.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# evaluate the tuned model\n",
+    "trained_regressor = train_score_regressor(sklearn_regressor = DecisionTreeRegressor,\n",
+    "                                          X_train = X_train, y_train = y_train, \n",
+    "                                          X_test = X_test, y_test = y_test, \n",
+    "                                          model_parameters = grid_rf.best_estimator_.get_params())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "We can check the variation in the mean cross validation score for the different parameter permutations in the grid search and see which parameters have the biggest impact on performance. \n",
+    "\n",
+    "In this particulatr case, it shows the max_depth has the biggest impact."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# get the cross validation mean score and associated std across the K folds\n",
+    "means = grid_rf.cv_results_['mean_test_score']\n",
+    "stds = grid_rf.cv_results_['std_test_score']\n",
+    "# print the mean, std and parameters for each permutation\n",
+    "for mean, std, params in zip(means, stds, grid_rf.cv_results_['params']):\n",
+    "    print(\"%0.3f (+/-%0.03f) for %r\"\n",
+    "          % (mean, std * 2, params))"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
